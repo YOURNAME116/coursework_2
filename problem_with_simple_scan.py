@@ -44,6 +44,9 @@ class YaraScanner:
             print(f"File '{file_path}' does not exist.")
             
             sys.exit()
+        except PermissionError:
+            print(f"permission error. skipping {file_path}..... ")
+            return None
 
     def scan_directory(self, directory, recursive=False):
         if os.path.exists(directory):
