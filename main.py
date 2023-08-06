@@ -7,6 +7,7 @@ import sys
 import hashlib
 # import pyautogui
 import signal
+import send2trash
 
 
 
@@ -27,15 +28,28 @@ def get_file_md5(file_path):
             md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
+
+
 def compare_hashes_with_file(directory_path, file_hashes):
     """Compare MD5 hashes of files in the directory with the hashes in the file."""
-    
+    detected_malware = []
+
     for root, _, files in os.walk(directory_path):
         for filename in files:
             file_path = os.path.join(root, filename)
-            md5_hash = get_file_md5(file_path)
-            if md5_hash in file_hashes:
-                print(f"File '{filename}' is a malware detected by hash.")
+            print(f"Scanning {file_path} with hash")
+            try:
+                md5_hash = get_file_md5(file_path)  # Assuming you have a function get_file_md5 to calculate MD5 hash
+                if md5_hash in file_hashes:
+                    print(f"File '{filename}' is a malware detected by hash.")
+                    detected_malware.append(file_path)
+            except PermissionError:
+                time.sleep(1)
+                print(f"Permission error while accessing '{filename}'. Continuing to scan other files.")
+    
+    return detected_malware
+# Call the compare_hashes_with_file function with the desired directory_path and file_hashes
+
   
             
   
@@ -116,7 +130,7 @@ class YaraScanner:
                                 
                                 # file_path = os.path.join(root, filename)
                                 else:
-                                    print("scanning "+file_path)
+                                    print("scanning "+file_path +" with yara")
                                     files.append(file_path)
                 else:
                     for filename in os.listdir(directory):
@@ -147,24 +161,6 @@ class YaraScanner:
                             output_lines.extend(result)
 
                 if not output_lines:
-                    logo =  """\n\n\n
-                                
-                                                                                                                
-                                                                                                                
-/$$   /$$  /$$$$$$   /$$$$$$  /$$$$$$         /$$$$$$$  /$$$$$$$  /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$   /$$$$$$ 
-| $$  | $$ |____  $$ /$$__  $$|____  $$       /$$_____/ /$$_____/ |____  $$| $$__  $$| $$__  $$ /$$__  $$ /$$__  $$
-| $$  | $$  /$$$$$$$| $$  \__/ /$$$$$$$      |  $$$$$$ | $$        /$$$$$$$| $$  \ $$| $$  \ $$| $$$$$$$$| $$  \__/
-| $$  | $$ /$$__  $$| $$      /$$__  $$       \____  $$| $$       /$$__  $$| $$  | $$| $$  | $$| $$_____/| $$      
-|  $$$$$$$|  $$$$$$$| $$     |  $$$$$$$       /$$$$$$$/|  $$$$$$$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$$| $$      
-\____  $$ \_______/|__/      \_______/      |_______/  \_______/ \_______/|__/  |__/|__/  |__/ \_______/|__/      
-/$$  | $$                                                                                                         
-|  $$$$$$/                                                                                                         
-\______/                                                                                                          
-
-                                                                                                                                                                                                        
-
-                                \n\n"""
-                    output_lines.append(f"{logo}")
                     output_lines.append(f"YARA rules did not match any file in the directory '{directory}'.")
                 return output_lines
             else:
@@ -176,7 +172,11 @@ class YaraScanner:
             
             
 
-    def start_scan(self, file_path, directory, recursive=False):
+    def start_scan(self,args, file_path, directory, recursive=False):
+        if args.hash: 
+            print("\n\n\033[1myara rules = \033[0m", end='')
+            return None
+            
         
         if file_path:
             if not self.compiled_rules:
@@ -212,20 +212,42 @@ def main():
 
     
         compare_hashes_with_file(dir, file_hashes) 
+        detected_malware = compare_hashes_with_file(dir, file_hashes)
+        if detected_malware:
+            print("\nDetected malware files:")
+            for file_path in detected_malware:
+                print(file_path)
 
-      
+            user_input = input("Do you want to move these files to the recycle bin? (y/n): ").lower()
+            if user_input == "y":
+                for file_path in detected_malware:
+                    try:
+                        normalized_file_path = os.path.normpath(file_path)
+                        # print(normalized_file_path)
+                        send2trash.send2trash(normalized_file_path)  # Move the file to the recycle bin
+                        
+                        print(f"File '{file_path}' moved to the recycle bin.")
+                    except Exception as e:
+                        print(f"Error moving file '{file_path}' to the recycle bin: {e}")
+            elif user_input == "n":
+                print(f"Files were not moved to the recycle bin.")
+            else:
+                print("Invalid input. Files were not moved to the recycle bin.")
+                
+
+    
              
 
 
     
     if args.file or args.directory:
-        rule_file_path = "C:\\Users\\Acer\\OneDrive - Softwarica College\\Desktop\\course work python\\test_rule.yar"
+        rule_file_path = "C:\\Users\\Acer\\OneDrive - Softwarica College\\Desktop\\course work python\\malware_rule.yar"
         num_threads = args.threads
             # Read MD5 hashes from the file
 
 
         scanner = YaraScanner(rule_file_path, num_threads)
-        output = scanner.start_scan(args.file, args.directory, recursive=args.recursive)
+        output = scanner.start_scan(args,args.file,args.directory, recursive=args.recursive)
 
         if output:
             if args.output:
@@ -245,6 +267,8 @@ def main():
                     with open("YARA_" + args.output + ".txt", "a") as output_file:
                         output_file.write(output)
                     print(f"File saved to YARA_{args.output}.txt")
+               
+
             else:
                 print(output)
         elif output== "directory_not_found":
