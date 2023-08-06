@@ -8,6 +8,7 @@ import hashlib
 # import pyautogui
 import signal
 import send2trash
+import re
 
 
 
@@ -251,6 +252,7 @@ def main():
 
         if output:
             if args.output:
+                print(output)
                 if args.output.startswith("YARA_") and args.output.endswith(".txt"):
                     with open(args.output, "a") as output_file:
                         output_file.write(output)
@@ -267,10 +269,25 @@ def main():
                     with open("YARA_" + args.output + ".txt", "a") as output_file:
                         output_file.write(output)
                     print(f"File saved to YARA_{args.output}.txt")
-               
+              
+                   
 
             else:
                 print(output)
+                file_paths = re.findall(r"matched the file: (.+)\n", output)
+                for normalized_file_pather in file_paths:
+                    normalized_file_pather = os.path.normpath(normalized_file_pather)
+                    user_input = input(f"Do you want to move the file '{normalized_file_pather}' to the recycle bin? (y/n): ").lower()
+                    if user_input == "y":
+                            try:
+                                send2trash.send2trash(normalized_file_pather)  # Move the file to the recycle bin
+                                print(f"File '{normalized_file_pather}' moved to the recycle bin.")
+                            except Exception as e:
+                                print(f"Error moving file '{normalized_file_pather}' to the recycle bin: {e}")
+                    elif user_input == "n":
+                            print(f"File '{normalized_file_pather}' was not moved to the recycle bin.")
+                    else:
+                            print("Invalid input. File was not moved to the recycle bin.")
         elif output== "directory_not_found":
             print(output)
         else:
